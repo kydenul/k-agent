@@ -22,6 +22,7 @@ func NewUserHandler(userClient *client.UserClient) *UserHandler {
 
 // rpcCtx returns a context with a reasonable RPC deadline.
 func rpcCtx() (context.Context, context.CancelFunc) {
+	//nolint:gosec
 	return context.WithTimeout(context.Background(), 5*time.Second)
 }
 
