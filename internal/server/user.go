@@ -4,14 +4,21 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"math"
+	"fmt"
 	"time"
 
+	"github.com/bytedance/sonic"
 	"github.com/google/uuid"
 	"github.com/kydenul/k-agent/internal/stores"
 	"github.com/kydenul/k-agent/pb/user"
+	"github.com/kydenul/log"
+	"github.com/spf13/cast"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+)
+
+const (
+	userCacheTTL = 5 * time.Minute
 )
 
 type UserServer struct {
@@ -29,10 +36,55 @@ func NewUserServer(pg *stores.PostgresClient, rdb *stores.RedisClient) *UserServ
 	}
 }
 
+func (s *UserServer) userRedisKey(id string) string {
+	return "k-agent:user:" + id
+}
+
+func (s *UserServer) userListRedisKey(page, pageSize int) string {
+	return fmt.Sprintf("k-agent:user:list:%d:%d", page, pageSize)
+}
+
+const userListRedisKeyPattern = "k-agent:user:list:*"
+
+// invalidateListCache removes all cached user list pages.
+func (s *UserServer) invalidateListCache(ctx context.Context) {
+	iter := s.rdb.Scan(ctx, 0, userListRedisKeyPattern, 100).Iterator()
+	var keys []string
+	for iter.Next(ctx) {
+		keys = append(keys, iter.Val())
+	}
+
+	if len(keys) > 0 {
+		if err := s.rdb.Del(ctx, keys...).Err(); err != nil {
+			log.Warnf("failed to invalidate user list cache: %v", err)
+		}
+	}
+}
+
+func userToProto(u *stores.User) *user.User {
+	return &user.User{
+		Id:        u.ID,
+		Name:      u.Name,
+		Email:     u.Email,
+		CreatedAt: u.CreatedAt.Format(time.DateTime),
+	}
+}
+
 func (s *UserServer) GetUser(
 	ctx context.Context,
 	req *user.GetUserRequest,
 ) (*user.GetUserResponse, error) {
+	// Try to get user from Redis cache first
+	if val, err := s.rdb.Get(ctx, s.userRedisKey(req.GetId())).Result(); err == nil {
+		u := new(stores.User)
+		if err := sonic.UnmarshalString(val, u); err == nil {
+			return &user.GetUserResponse{User: userToProto(u)}, nil
+		}
+
+		log.Warnf("failed to unmarshal user: %v, it will get from database", err)
+	}
+
+	// Get user from database
 	u := new(stores.User)
 	err := s.db.DB().NewSelect().Model(u).
 		Where("id = ?", req.GetId()).Scan(ctx)
@@ -43,14 +95,23 @@ func (s *UserServer) GetUser(
 		return nil, status.Errorf(codes.Internal, "failed to get user: %v", err)
 	}
 
-	return &user.GetUserResponse{
-		User: &user.User{
-			Id:        u.ID,
-			Name:      u.Name,
-			Email:     u.Email,
-			CreatedAt: u.CreatedAt,
-		},
-	}, nil
+	ret := &user.GetUserResponse{
+		User: userToProto(u),
+	}
+
+	// Set user to Redis cache
+	us, err := sonic.MarshalString(u)
+	if err != nil {
+		log.Warnf("failed to marshal user: %v", err)
+		return ret, nil
+	}
+
+	if err := s.rdb.Set(ctx, s.userRedisKey(req.GetId()), us, userCacheTTL).Err(); err != nil {
+		log.Warnf("failed to set user to Redis cache: %v", err)
+		return ret, nil
+	}
+
+	return ret, nil
 }
 
 func (s *UserServer) CreateUser(
@@ -61,7 +122,7 @@ func (s *UserServer) CreateUser(
 		ID:        uuid.New().String(),
 		Name:      req.GetName(),
 		Email:     req.GetEmail(),
-		CreatedAt: time.Now().Unix(),
+		CreatedAt: time.Now(),
 	}
 
 	_, err := s.db.DB().NewInsert().Model(u).Exec(ctx)
@@ -69,14 +130,16 @@ func (s *UserServer) CreateUser(
 		return nil, status.Errorf(codes.Internal, "failed to create user: %v", err)
 	}
 
+	s.invalidateListCache(ctx)
+
 	return &user.CreateUserResponse{
-		User: &user.User{
-			Id:        u.ID,
-			Name:      u.Name,
-			Email:     u.Email,
-			CreatedAt: u.CreatedAt,
-		},
+		User: userToProto(u),
 	}, nil
+}
+
+type listUsersCache struct {
+	Users []stores.User `json:"users"`
+	Total int           `json:"total"`
 }
 
 func (s *UserServer) ListUsers(
@@ -93,6 +156,27 @@ func (s *UserServer) ListUsers(
 		pageSize = 20
 	}
 
+	cacheKey := s.userListRedisKey(page, pageSize)
+
+	// Try to get from Redis cache first
+	if val, err := s.rdb.Get(ctx, cacheKey).Result(); err == nil {
+		cached := new(listUsersCache)
+		if err := sonic.UnmarshalString(val, cached); err == nil {
+			pbUsers := make([]*user.User, len(cached.Users))
+			for i := range cached.Users {
+				pbUsers[i] = userToProto(&cached.Users[i])
+			}
+
+			return &user.ListUsersResponse{
+				Users: pbUsers,
+				Total: cast.ToInt32(cached.Total),
+			}, nil
+		}
+
+		log.Warnf("failed to unmarshal user list: %v, it will get from database", err)
+	}
+
+	// Get from database
 	var users []stores.User
 	count, err := s.db.DB().NewSelect().
 		Model(&users).
@@ -105,19 +189,27 @@ func (s *UserServer) ListUsers(
 	}
 
 	pbUsers := make([]*user.User, len(users))
-	for i, u := range users {
-		pbUsers[i] = &user.User{
-			Id:        u.ID,
-			Name:      u.Name,
-			Email:     u.Email,
-			CreatedAt: u.CreatedAt,
-		}
+	for i := range users {
+		pbUsers[i] = userToProto(&users[i])
 	}
 
-	return &user.ListUsersResponse{
+	ret := &user.ListUsersResponse{
 		Users: pbUsers,
-		Total: int32(min(count, math.MaxInt32)), //nolint:gosec // bounded by min
-	}, nil
+		Total: cast.ToInt32(count),
+	}
+
+	// Set to Redis cache
+	cached, err := sonic.MarshalString(&listUsersCache{Users: users, Total: count})
+	if err != nil {
+		log.Warnf("failed to marshal user list: %v", err)
+		return ret, nil
+	}
+
+	if err := s.rdb.Set(ctx, cacheKey, cached, userCacheTTL).Err(); err != nil {
+		log.Warnf("failed to set user list to Redis cache: %v", err)
+	}
+
+	return ret, nil
 }
 
 func (s *UserServer) DeleteUser(
@@ -133,6 +225,11 @@ func (s *UserServer) DeleteUser(
 	}
 
 	rows, _ := res.RowsAffected()
+
+	if rows > 0 {
+		s.rdb.Del(ctx, s.userRedisKey(req.GetId()))
+		s.invalidateListCache(ctx)
+	}
 
 	return &user.DeleteUserResponse{
 		Success: rows > 0,

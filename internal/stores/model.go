@@ -2,6 +2,7 @@ package stores
 
 import (
 	"context"
+	"time"
 
 	"github.com/kydenul/log"
 	"github.com/uptrace/bun"
@@ -10,10 +11,10 @@ import (
 type User struct {
 	bun.BaseModel `bun:"table:users"`
 
-	ID        string `bun:",pk,type:varchar(36)"`
-	Name      string `bun:",notnull,type:varchar(255)"`
-	Email     string `bun:",notnull,unique,type:varchar(255)"`
-	CreatedAt int64  `bun:",nullzero,notnull,default:extract(epoch from now())::bigint"`
+	ID        string    `bun:",pk,type:varchar(36)"                           json:"id"`
+	Name      string    `bun:",notnull,type:varchar(255)"                     json:"name"`
+	Email     string    `bun:",notnull,unique,type:varchar(255)"              json:"email"`
+	CreatedAt time.Time `bun:",nullzero,notnull,default:now(),type:timestamp" json:"created_at"`
 }
 
 type CreateTableFunc func(*PostgresClient) error
