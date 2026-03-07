@@ -21,6 +21,9 @@ profile.cov
 # Dependency directories (remove the comment below to include it)
 # vendor/
 
+# Generated protobuf code (regenerate with `make proto`)
+pb/
+
 # Go workspace file
 go.work
 go.work.sum
