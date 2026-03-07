@@ -4,11 +4,12 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/kydenul/k-agent/config"
 	"github.com/kydenul/k-agent/internal/handler"
 	"github.com/kydenul/k-agent/internal/middleware"
 )
 
-func New(userHandler *handler.UserHandler) *gin.Engine {
+func New(cfg *config.HTTP, userHandler *handler.UserHandler) *gin.Engine {
 	r := gin.New()
 
 	// NOTE: Global Middleware
@@ -17,7 +18,7 @@ func New(userHandler *handler.UserHandler) *gin.Engine {
 			"/health",
 		},
 	}))
-	r.Use(middleware.CORS())
+	r.Use(middleware.CORS(cfg.CORS.AllowOrigins))
 	r.Use(middleware.Recovery())
 
 	// NOTE: Health check

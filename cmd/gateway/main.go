@@ -32,7 +32,7 @@ func main() {
 
 	// NOTE: 3. Wire Handlers and Router
 	userHandler := handler.NewUserHandler(userClient)
-	r := router.New(userHandler)
+	r := router.New(&cfg.HTTP, userHandler)
 
 	// NOTE: 4. Start HTTP Server with Gra
 	srv := &http.Server{

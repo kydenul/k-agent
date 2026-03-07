@@ -1,26 +1,25 @@
 package middleware
 
-// 跨域资源共享
-
 import (
-	"net/http"
+	"time"
 
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 )
 
 // CORS returns a middleware function that sets CORS headers.
-// Restrict AllowOrigins in production.
-func CORS() gin.HandlerFunc {
-	return func(ctx *gin.Context) {
-		ctx.Header("Access-Control-Allow-Origin", "*")
-		ctx.Header("Access-Control-Allow-Headers", "Content-Type, Authorization")
-		ctx.Header("Access-Control-Allow-Methods", "POST, GET, DELETE, PUT, OPTIONS")
-
-		if ctx.Request.Method == http.MethodOptions {
-			ctx.AbortWithStatus(http.StatusNoContent)
-			return
-		}
-
-		ctx.Next()
+// When allowOrigins is empty, all origins are allowed (dev mode).
+func CORS(allowOrigins []string) gin.HandlerFunc {
+	if len(allowOrigins) == 0 {
+		return cors.Default()
 	}
+
+	return cors.New(cors.Config{
+		AllowOrigins:     allowOrigins,
+		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
+		ExposeHeaders:    []string{"Content-Length"},
+		AllowCredentials: true,
+		MaxAge:           12 * time.Hour,
+	})
 }

@@ -7,11 +7,12 @@
 package user
 
 import (
-	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
-	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
+
+	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
+	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 )
 
 const (
@@ -518,18 +519,20 @@ func file_user_user_proto_rawDescGZIP() []byte {
 	return file_user_user_proto_rawDescData
 }
 
-var file_user_user_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
-var file_user_user_proto_goTypes = []any{
-	(*User)(nil),               // 0: user.User
-	(*GetUserRequest)(nil),     // 1: user.GetUserRequest
-	(*GetUserResponse)(nil),    // 2: user.GetUserResponse
-	(*CreateUserRequest)(nil),  // 3: user.CreateUserRequest
-	(*CreateUserResponse)(nil), // 4: user.CreateUserResponse
-	(*ListUsersRequest)(nil),   // 5: user.ListUsersRequest
-	(*ListUsersResponse)(nil),  // 6: user.ListUsersResponse
-	(*DeleteUserRequest)(nil),  // 7: user.DeleteUserRequest
-	(*DeleteUserResponse)(nil), // 8: user.DeleteUserResponse
-}
+var (
+	file_user_user_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
+	file_user_user_proto_goTypes  = []any{
+		(*User)(nil),               // 0: user.User
+		(*GetUserRequest)(nil),     // 1: user.GetUserRequest
+		(*GetUserResponse)(nil),    // 2: user.GetUserResponse
+		(*CreateUserRequest)(nil),  // 3: user.CreateUserRequest
+		(*CreateUserResponse)(nil), // 4: user.CreateUserResponse
+		(*ListUsersRequest)(nil),   // 5: user.ListUsersRequest
+		(*ListUsersResponse)(nil),  // 6: user.ListUsersResponse
+		(*DeleteUserRequest)(nil),  // 7: user.DeleteUserRequest
+		(*DeleteUserResponse)(nil), // 8: user.DeleteUserResponse
+	}
+)
 var file_user_user_proto_depIdxs = []int32{
 	0, // 0: user.GetUserResponse.user:type_name -> user.User
 	0, // 1: user.CreateUserResponse.user:type_name -> user.User

@@ -2,6 +2,9 @@ Application:
   HTTP:
     gin_mode: "debug"
     port: ":5568"
+    cors:
+      allow_origins:
+        - "http://localhost:3000"
 
   GRPC:
     svr_addr: ":5569"

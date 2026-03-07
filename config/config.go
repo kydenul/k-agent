@@ -25,6 +25,13 @@ type HTTP struct {
 	Port string `mapstructure:"Port"`
 	// gin.DebugMode | gin.ReleaseMode
 	GinMode string `mapstructure:"gin_mode"`
+	// CORS configuration
+	CORS CORS `mapstructure:"cors"`
+}
+
+type CORS struct {
+	// Allowed origins, e.g. ["http://localhost:3000", "https://example.com"]
+	AllowOrigins []string `mapstructure:"allow_origins"`
 }
 
 type GRPC struct {
