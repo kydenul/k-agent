@@ -1,0 +1,50 @@
+Application:
+  HTTP:
+    gin_mode: "debug"
+    port: ":5568"
+
+  GRPC:
+    svr_addr: ":5569"
+
+  Postgres:
+    dsn: "postgres://username:password@localhost:5432/kagent?sslmode=disable"
+    max_open_conns: 25
+    max_idle_conns: 10
+    conn_max_idle_time: 10m
+    conn_max_lifetime: 30m
+    ping_retries: 3
+    ping_timeout: 3s
+
+  Redis:
+    host: 127.0.0.1
+    port: 6379
+    password: ""
+    pool_size: 100
+    max_idle_conns: 10
+
+# Logger configuration under KLOG key
+KLOG:
+  prefix: "k-agent_"
+  directory: "./logs"
+  filename: "k-agent"
+  level: "debug"
+  format: "console"
+  time_layout: "2006-01-02 15:04:05.000"
+
+  # Basic settings
+  disable_caller: false
+  disable_stacktrace: false
+  disable_split_error: false
+
+  # File rotation
+  max_size: 100
+  max_backups: 5
+  compress: true
+
+  # Console output control
+  console_output: true
+
+  # Sampling (reduces log volume in high-traffic scenarios)
+  enable_sampling: false
+  sample_initial: 100
+  sample_thereafter: 1000
