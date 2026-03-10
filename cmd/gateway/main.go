@@ -10,9 +10,10 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/kydenul/k-agent/config"
-	"github.com/kydenul/k-agent/internal/client"
 	"github.com/kydenul/k-agent/internal/handler"
 	"github.com/kydenul/k-agent/internal/router"
+	"github.com/kydenul/k-agent/internal/service"
+	"github.com/kydenul/k-agent/internal/stores"
 	"github.com/kydenul/log"
 )
 
@@ -21,20 +22,28 @@ func main() {
 	cfg := config.Load()
 	gin.SetMode(cfg.HTTP.GinMode)
 
-	// NOTE: 2. Build gRPC Clients
-	userClient, err := client.NewUserClient(cfg.GRPC.SvrAddr)
+	// NOTE: 2. Initialize PostgreSQL
+	pgClient, err := stores.NewPostgresClient(context.Background(), &cfg.Postgres)
 	if err != nil {
-		log.Fatalf("failed to create user gRPC client: %v", err)
+		log.Fatalf("failed to init postgres: %v", err)
 	}
-	defer userClient.Close()
+	defer pgClient.Close()
 
-	log.Infof("✅ connected to gRPC service @ %s", cfg.GRPC.SvrAddr)
+	stores.EnsureExistApplicationTable(pgClient, stores.CreateTableUser)
 
-	// NOTE: 3. Wire Handlers and Router
-	userHandler := handler.NewUserHandler(userClient)
+	// NOTE: 3. Initialize Redis
+	rdb, err := stores.NewRedisClient(&cfg.Redis)
+	if err != nil {
+		log.Fatalf("failed to init redis: %v", err)
+	}
+	defer rdb.Close()
+
+	// NOTE: 4. Wire Services, Handlers, and Router
+	userService := service.NewUserService(pgClient, rdb)
+	userHandler := handler.NewUserHandler(userService)
 	r := router.New(&cfg.HTTP, userHandler)
 
-	// NOTE: 4. Start HTTP Server with Gra
+	// NOTE: 5. Start HTTP Server with Graceful Shutdown
 	srv := &http.Server{
 		Addr:         cfg.HTTP.Port,
 		Handler:      r,
@@ -44,7 +53,7 @@ func main() {
 	}
 
 	go func() {
-		log.Infof("🚀 HTTP gateway listening on %s", cfg.HTTP.Port)
+		log.Infof("HTTP server listening on %s", cfg.HTTP.Port)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("http server error: %v", err)
 		}
@@ -55,12 +64,12 @@ func main() {
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 
-	log.Infoln("🛑 shutting down...")
+	log.Infoln("shutting down...")
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	if err := srv.Shutdown(ctx); err != nil {
 		log.Fatalf("server forced to shutdown: %v", err)
 	}
-	log.Infoln("✅ server exited gracefully")
+	log.Infoln("server exited gracefully")
 }

@@ -15,7 +15,6 @@ var conf = flag.String("conf", "./k-agent.yaml", "config file path")
 // Config holds all application configuration
 type Config struct {
 	HTTP     HTTP
-	GRPC     GRPC
 	Postgres Postgres
 	Redis    Redis
 }
@@ -32,11 +31,6 @@ type HTTP struct {
 type CORS struct {
 	// Allowed origins, e.g. ["http://localhost:3000", "https://example.com"]
 	AllowOrigins []string `mapstructure:"allow_origins"`
-}
-
-type GRPC struct {
-	// e.g. "localhost:5567"
-	SvrAddr string `mapstructure:"svr_addr"`
 }
 
 // PostgresConfig holds PostgreSQL connection configuration.

@@ -6,9 +6,6 @@ Application:
       allow_origins:
         - "http://localhost:3000"
 
-  GRPC:
-    svr_addr: ":5569"
-
   Postgres:
     dsn: "postgres://postgres:postgres@localhost:5432/kagent?sslmode=disable"
     max_open_conns: 25

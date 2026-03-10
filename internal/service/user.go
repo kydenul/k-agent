@@ -1,4 +1,4 @@
-package server
+package service
 
 import (
 	"context"
@@ -10,44 +10,51 @@ import (
 	"github.com/bytedance/sonic"
 	"github.com/google/uuid"
 	"github.com/kydenul/k-agent/internal/stores"
-	"github.com/kydenul/k-agent/pb/user"
 	"github.com/kydenul/log"
 	"github.com/spf13/cast"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 const (
 	userCacheTTL = 5 * time.Minute
 )
 
-type UserServer struct {
-	user.UnimplementedUserServiceServer
+var ErrUserNotFound = errors.New("user not found")
 
+type UserResponse struct {
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	Email     string `json:"email"`
+	CreatedAt string `json:"created_at"`
+}
+
+type ListUsersResponse struct {
+	Users []*UserResponse `json:"users"`
+	Total int32           `json:"total"`
+}
+
+type UserService struct {
 	db  *stores.PostgresClient
 	rdb *stores.RedisClient
 }
 
-// NewUserServer creates a new user server which contains PostgresClient and RedisClient.
-func NewUserServer(pg *stores.PostgresClient, rdb *stores.RedisClient) *UserServer {
-	return &UserServer{
+func NewUserService(pg *stores.PostgresClient, rdb *stores.RedisClient) *UserService {
+	return &UserService{
 		db:  pg,
 		rdb: rdb,
 	}
 }
 
-func (s *UserServer) userRedisKey(id string) string {
+func (s *UserService) userRedisKey(id string) string {
 	return "k-agent:user:" + id
 }
 
-func (s *UserServer) userListRedisKey(page, pageSize int) string {
+func (s *UserService) userListRedisKey(page, pageSize int) string {
 	return fmt.Sprintf("k-agent:user:list:%d:%d", page, pageSize)
 }
 
 const userListRedisKeyPattern = "k-agent:user:list:*"
 
-// invalidateListCache removes all cached user list pages.
-func (s *UserServer) invalidateListCache(ctx context.Context) {
+func (s *UserService) invalidateListCache(ctx context.Context) {
 	iter := s.rdb.Scan(ctx, 0, userListRedisKeyPattern, 100).Iterator()
 	var keys []string
 	for iter.Next(ctx) {
@@ -61,80 +68,67 @@ func (s *UserServer) invalidateListCache(ctx context.Context) {
 	}
 }
 
-func userToProto(u *stores.User) *user.User {
-	return &user.User{
-		Id:        u.ID,
+func userToResponse(u *stores.User) *UserResponse {
+	return &UserResponse{
+		ID:        u.ID,
 		Name:      u.Name,
 		Email:     u.Email,
 		CreatedAt: u.CreatedAt.Format(time.DateTime),
 	}
 }
 
-func (s *UserServer) GetUser(
-	ctx context.Context,
-	req *user.GetUserRequest,
-) (*user.GetUserResponse, error) {
-	// Try to get user from Redis cache first
-	if val, err := s.rdb.Get(ctx, s.userRedisKey(req.GetId())).Result(); err == nil {
+func (s *UserService) GetUser(ctx context.Context, id string) (*UserResponse, error) {
+	// Try Redis cache first
+	if val, err := s.rdb.Get(ctx, s.userRedisKey(id)).Result(); err == nil {
 		u := new(stores.User)
 		if err := sonic.UnmarshalString(val, u); err == nil {
-			return &user.GetUserResponse{User: userToProto(u)}, nil
+			return userToResponse(u), nil
 		}
 
 		log.Warnf("failed to unmarshal user: %v, it will get from database", err)
 	}
 
-	// Get user from database
+	// Get from database
 	u := new(stores.User)
 	err := s.db.DB().NewSelect().Model(u).
-		Where("id = ?", req.GetId()).Scan(ctx)
+		Where("id = ?", id).Scan(ctx)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, status.Errorf(codes.NotFound, "user %s not found", req.GetId())
+			return nil, ErrUserNotFound
 		}
-		return nil, status.Errorf(codes.Internal, "failed to get user: %v", err)
+		return nil, fmt.Errorf("failed to get user: %w", err)
 	}
 
-	ret := &user.GetUserResponse{
-		User: userToProto(u),
-	}
-
-	// Set user to Redis cache
+	// Set to Redis cache
 	us, err := sonic.MarshalString(u)
 	if err != nil {
 		log.Warnf("failed to marshal user: %v", err)
-		return ret, nil
+		return userToResponse(u), nil
 	}
 
-	if err := s.rdb.Set(ctx, s.userRedisKey(req.GetId()), us, userCacheTTL).Err(); err != nil {
+	if err := s.rdb.Set(ctx, s.userRedisKey(id), us, userCacheTTL).Err(); err != nil {
 		log.Warnf("failed to set user to Redis cache: %v", err)
-		return ret, nil
 	}
 
-	return ret, nil
+	return userToResponse(u), nil
 }
 
-func (s *UserServer) CreateUser(
-	ctx context.Context,
-	req *user.CreateUserRequest,
-) (*user.CreateUserResponse, error) {
+func (s *UserService) CreateUser(ctx context.Context, name, email string) (*UserResponse, error) {
 	u := &stores.User{
 		ID:        uuid.New().String(),
-		Name:      req.GetName(),
-		Email:     req.GetEmail(),
+		Name:      name,
+		Email:     email,
 		CreatedAt: time.Now(),
 	}
 
 	_, err := s.db.DB().NewInsert().Model(u).Exec(ctx)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "failed to create user: %v", err)
+		return nil, fmt.Errorf("failed to create user: %w", err)
 	}
 
 	s.invalidateListCache(ctx)
 
-	return &user.CreateUserResponse{
-		User: userToProto(u),
-	}, nil
+	return userToResponse(u), nil
 }
 
 type listUsersCache struct {
@@ -142,33 +136,30 @@ type listUsersCache struct {
 	Total int           `json:"total"`
 }
 
-func (s *UserServer) ListUsers(
+func (s *UserService) ListUsers(
 	ctx context.Context,
-	req *user.ListUsersRequest,
-) (*user.ListUsersResponse, error) {
-	page := int(req.GetPage())
+	page, pageSize int,
+) (*ListUsersResponse, error) {
 	if page < 1 {
 		page = 1
 	}
-
-	pageSize := int(req.GetPageSize())
 	if pageSize < 1 {
 		pageSize = 20
 	}
 
 	cacheKey := s.userListRedisKey(page, pageSize)
 
-	// Try to get from Redis cache first
+	// Try Redis cache first
 	if val, err := s.rdb.Get(ctx, cacheKey).Result(); err == nil {
 		cached := new(listUsersCache)
 		if err := sonic.UnmarshalString(val, cached); err == nil {
-			pbUsers := make([]*user.User, len(cached.Users))
+			users := make([]*UserResponse, len(cached.Users))
 			for i := range cached.Users {
-				pbUsers[i] = userToProto(&cached.Users[i])
+				users[i] = userToResponse(&cached.Users[i])
 			}
 
-			return &user.ListUsersResponse{
-				Users: pbUsers,
+			return &ListUsersResponse{
+				Users: users,
 				Total: cast.ToInt32(cached.Total),
 			}, nil
 		}
@@ -185,16 +176,16 @@ func (s *UserServer) ListUsers(
 		Offset((page - 1) * pageSize).
 		ScanAndCount(ctx)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "failed to list users: %v", err)
+		return nil, fmt.Errorf("failed to list users: %w", err)
 	}
 
-	pbUsers := make([]*user.User, len(users))
+	resp := make([]*UserResponse, len(users))
 	for i := range users {
-		pbUsers[i] = userToProto(&users[i])
+		resp[i] = userToResponse(&users[i])
 	}
 
-	ret := &user.ListUsersResponse{
-		Users: pbUsers,
+	ret := &ListUsersResponse{
+		Users: resp,
 		Total: cast.ToInt32(count),
 	}
 
@@ -212,26 +203,21 @@ func (s *UserServer) ListUsers(
 	return ret, nil
 }
 
-func (s *UserServer) DeleteUser(
-	ctx context.Context,
-	req *user.DeleteUserRequest,
-) (*user.DeleteUserResponse, error) {
+func (s *UserService) DeleteUser(ctx context.Context, id string) (bool, error) {
 	res, err := s.db.DB().NewDelete().
 		Model((*stores.User)(nil)).
-		Where("id = ?", req.GetId()).
+		Where("id = ?", id).
 		Exec(ctx)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "failed to delete user: %v", err)
+		return false, fmt.Errorf("failed to delete user: %w", err)
 	}
 
 	rows, _ := res.RowsAffected()
 
 	if rows > 0 {
-		s.rdb.Del(ctx, s.userRedisKey(req.GetId()))
+		s.rdb.Del(ctx, s.userRedisKey(id))
 		s.invalidateListCache(ctx)
 	}
 
-	return &user.DeleteUserResponse{
-		Success: rows > 0,
-	}, nil
+	return rows > 0, nil
 }
