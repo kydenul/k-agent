@@ -9,7 +9,11 @@ import (
 	"github.com/kydenul/k-agent/internal/middleware"
 )
 
-func New(cfg *config.HTTP, userHandler *handler.UserHandler) *gin.Engine {
+func New(
+	cfg *config.HTTP,
+	sessionHandler *handler.SessionHandler,
+	agentHandler *handler.AgentHandler,
+) *gin.Engine {
 	r := gin.New()
 
 	// NOTE: Global Middleware
@@ -26,24 +30,19 @@ func New(cfg *config.HTTP, userHandler *handler.UserHandler) *gin.Engine {
 		ctx.JSON(http.StatusOK, gin.H{"status": "ok"})
 	})
 
-	// NOTE: API v1
-	v1 := r.Group("/api/v1")
-	{
-		user := v1.Group("/users")
-		{
-			// GET /api/v1/users
-			user.GET("", userHandler.ListUsers)
+	// NOTE: Session API
+	r.GET("/apps/:app_name/users/:user_id/sessions", sessionHandler.ListSessionsHandler)
+	r.POST("/apps/:app_name/users/:user_id/sessions", sessionHandler.CreateSessionHandler)
 
-			// POST /api/v1/users
-			user.POST("", userHandler.CreateUser)
+	// Agent Runtime API
 
-			// GET /api/v1/users/{id}
-			user.GET("/:id", userHandler.GetUser)
+	// POST /run
+	r.POST("/run", agentHandler.HandleRun)
+	r.OPTIONS("/run", func(c *gin.Context) { c.Status(http.StatusNoContent) })
 
-			// DELETE /api/v1/users/{id}
-			user.DELETE("/:id", userHandler.DeleteUser)
-		}
-	}
+	// POST /run_sse
+	r.POST("/run_sse", agentHandler.HandleRunSSE)
+	r.OPTIONS("/run_sse", func(c *gin.Context) { c.Status(http.StatusNoContent) })
 
 	return r
 }

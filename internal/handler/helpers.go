@@ -5,7 +5,7 @@ import (
 	"github.com/spf13/cast"
 )
 
-func parseQuery[T int | int32](c *gin.Context, key string, defaultVal T) T {
+func ParseQuery[T int | int32](c *gin.Context, key string, defaultVal T) T {
 	raw := c.Query(key)
 	if raw == "" {
 		return defaultVal
