@@ -77,3 +77,41 @@ func (svc *UserService) CreateSession(
 
 	return models.FromSession(resp.Session), http.StatusOK, nil
 }
+
+func (svc *UserService) GetSession(
+	ctx context.Context,
+	req *models.GetSessionRequest,
+) (*models.Session, int, error) {
+	resp, err := svc.sessionSvc.Get(ctx, &session.GetRequest{
+		AppName:   req.AppName,
+		UserID:    req.UserID,
+		SessionID: req.SessionID,
+	})
+	if err != nil {
+		log.Errorf("failed to get session: %v", err)
+
+		return nil, http.StatusInternalServerError, fmt.Errorf("failed to get session: %w", err)
+	}
+
+	log.Infof("get session, session: %v", resp.Session)
+
+	return models.FromSession(resp.Session), http.StatusOK, nil
+}
+
+func (svc *UserService) DeleteSession(
+	ctx context.Context,
+	req *models.DeleteSessionRequest,
+) (int, error) {
+	err := svc.sessionSvc.Delete(ctx, &session.DeleteRequest{
+		AppName:   req.AppName,
+		UserID:    req.UserID,
+		SessionID: req.SessionID,
+	})
+	if err != nil {
+		log.Errorf("failed to delete session: %v", err)
+
+		return http.StatusInternalServerError, fmt.Errorf("failed to delete session: %w", err)
+	}
+
+	return http.StatusNoContent, nil
+}

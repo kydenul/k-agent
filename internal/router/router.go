@@ -31,8 +31,16 @@ func New(
 	})
 
 	// NOTE: Session API
-	r.GET("/apps/:app_name/users/:user_id/sessions", sessionHandler.ListSessionsHandler)
-	r.POST("/apps/:app_name/users/:user_id/sessions", sessionHandler.CreateSessionHandler)
+	r.GET("/apps/:app_name/users/:user_id/sessions/:session_id",
+		sessionHandler.GetSessionHandler)
+	r.GET("/apps/:app_name/users/:user_id/sessions",
+		sessionHandler.ListSessionsHandler)
+	r.POST("/apps/:app_name/users/:user_id/sessions",
+		sessionHandler.CreateSessionHandler)
+	r.POST("/apps/:app_name/users/:user_id/sessions/:session_id",
+		sessionHandler.CreateSessionHandler)
+	r.DELETE("/apps/:app_name/users/:user_id/sessions/:session_id",
+		sessionHandler.DeleteSessionHandler)
 
 	// Agent Runtime API
 

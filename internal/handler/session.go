@@ -78,3 +78,53 @@ func (h *SessionHandler) CreateSessionHandler(c *gin.Context) {
 	// NOTE: Return the response
 	c.JSON(code, session)
 }
+
+// GetSessionHandler retrieves a specific session.
+// GET /apps/:app_name/users/:user_id/sessions/:session_id
+func (h *SessionHandler) GetSessionHandler(c *gin.Context) {
+	// NOTE: handle the parameters in the request
+	req := &models.GetSessionRequest{
+		AppName:   c.Param("app_name"),
+		UserID:    c.Param("user_id"),
+		SessionID: c.Param("session_id"),
+	}
+
+	if err := req.Validate(); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// NOTE: Call service to handle the request
+	session, code, err := h.userSvc.GetSession(c.Request.Context(), req)
+	if err != nil {
+		c.JSON(code, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(code, session)
+}
+
+// DeleteSessionHandler deletes a specific session.
+// DELETE /apps/:app_name/users/:user_id/sessions/:session_id
+func (h *SessionHandler) DeleteSessionHandler(c *gin.Context) {
+	// NOTE: handle the parameters in the request
+	req := &models.DeleteSessionRequest{
+		AppName:   c.Param("app_name"),
+		UserID:    c.Param("user_id"),
+		SessionID: c.Param("session_id"),
+	}
+
+	if err := req.Validate(); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// NOTE: Call service to handle the request
+	code, err := h.userSvc.DeleteSession(c.Request.Context(), req)
+	if err != nil {
+		c.JSON(code, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.Status(http.StatusNoContent)
+}

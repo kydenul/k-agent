@@ -161,3 +161,31 @@ func ToSessionEvent(e Event) *session.Event {
 		},
 	}
 }
+
+type GetSessionRequest struct {
+	AppName   string `json:"app_name"`
+	UserID    string `json:"user_id"`
+	SessionID string `json:"session_id"`
+}
+
+func (req *GetSessionRequest) Validate() error {
+	if req.AppName == "" || req.UserID == "" || req.SessionID == "" {
+		return ErrMissingAppNameOrUserIDOrSessionID
+	}
+
+	return nil
+}
+
+type DeleteSessionRequest struct {
+	AppName   string `json:"app_name"`
+	UserID    string `json:"user_id"`
+	SessionID string `json:"session_id"`
+}
+
+func (req *DeleteSessionRequest) Validate() error {
+	if req.AppName == "" || req.UserID == "" || req.SessionID == "" {
+		return ErrMissingAppNameOrUserIDOrSessionID
+	}
+
+	return nil
+}
