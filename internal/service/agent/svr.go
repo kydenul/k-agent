@@ -41,13 +41,13 @@ func NewServer(
 // prepareRunner validates the session, loads the agent, and creates a runner.
 func (svc *AgentService) prepareRunner(
 	ctx context.Context,
-	req *models.RunAgentRequest,
+	body *models.RunBody,
 ) (*runner.Runner, int, error) {
 	// Validate session exists
 	_, err := svc.sessionSvc.Get(ctx, &session.GetRequest{
-		AppName:   req.AppName,
-		UserID:    req.UserID,
-		SessionID: req.SessionID,
+		AppName:   body.AppName,
+		UserID:    body.UserID,
+		SessionID: body.SessionID,
 	})
 	if err != nil {
 		log.Error("session not found", err)
@@ -56,7 +56,7 @@ func (svc *AgentService) prepareRunner(
 	}
 
 	// Load agent
-	curAgent, err := svc.loader.LoadAgent(req.AppName)
+	curAgent, err := svc.loader.LoadAgent(body.AppName)
 	if err != nil {
 		log.Error("failed to load agent", err)
 
@@ -65,7 +65,7 @@ func (svc *AgentService) prepareRunner(
 
 	// Create runner
 	r, err := runner.New(runner.Config{
-		AppName:        req.AppName,
+		AppName:        body.AppName,
 		Agent:          curAgent,
 		MemoryService:  svc.memorySvc,
 		SessionService: svc.sessionSvc,
@@ -82,22 +82,22 @@ func (svc *AgentService) prepareRunner(
 // Run executes the agent and collects all events synchronously.
 func (svc *AgentService) Run(
 	ctx context.Context,
-	req *models.RunAgentRequest,
+	body *models.RunBody,
 ) ([]*models.Event, int, error) {
-	r, code, err := svc.prepareRunner(ctx, req)
+	r, code, err := svc.prepareRunner(ctx, body)
 	if err != nil {
 		return nil, code, err
 	}
 
 	// Determine streaming mode
 	streamingMode := agent.StreamingModeNone
-	if req.Streaming {
+	if body.Streaming {
 		streamingMode = agent.StreamingModeSSE
 	}
 
 	// Run and collect events
 	var events []*models.Event
-	for event, err := range r.Run(ctx, req.UserID, req.SessionID, &req.NewMessage,
+	for event, err := range r.Run(ctx, body.UserID, body.SessionID, &body.Message,
 		agent.RunConfig{StreamingMode: streamingMode}) {
 		if err != nil {
 			log.Error("runner error", err)
@@ -108,7 +108,7 @@ func (svc *AgentService) Run(
 	}
 
 	// Persist session to memory for cross-session search
-	if err := svc.addSessionToMemory(ctx, req.AppName, req.UserID, req.SessionID); err != nil {
+	if err := svc.addSessionToMemory(ctx, body.AppName, body.UserID, body.SessionID); err != nil {
 		log.Errorf("failed to persist session to memory: %v", err)
 	}
 
@@ -119,16 +119,16 @@ func (svc *AgentService) Run(
 // The caller is responsible for iterating and writing SSE frames.
 func (svc *AgentService) RunSSE(
 	ctx context.Context,
-	req *models.RunAgentRequest,
+	body *models.RunBody,
 ) (iter.Seq2[*models.Event, error], int, error) {
-	r, code, err := svc.prepareRunner(ctx, req)
+	r, code, err := svc.prepareRunner(ctx, body)
 	if err != nil {
 		return nil, code, err
 	}
 
 	eventIter := func(yield func(*models.Event, error) bool) {
 		for event, err := range r.Run(
-			ctx, req.UserID, req.SessionID, &req.NewMessage,
+			ctx, body.UserID, body.SessionID, &body.Message,
 			agent.RunConfig{StreamingMode: agent.StreamingModeSSE},
 		) {
 			if err != nil {
@@ -150,10 +150,10 @@ func (svc *AgentService) RunSSE(
 }
 
 // PostRun persists session to memory. Should be called after streaming completes.
-func (svc *AgentService) PostRun(ctx context.Context, req *models.RunAgentRequest) error {
-	log.Infof("post-run: %s/%s/%s", req.AppName, req.UserID, req.SessionID)
+func (svc *AgentService) PostRun(ctx context.Context, body *models.RunBody) error {
+	log.Infof("post-run: %s/%s/%s", body.AppName, body.UserID, body.SessionID)
 
-	return svc.addSessionToMemory(ctx, req.AppName, req.UserID, req.SessionID)
+	return svc.addSessionToMemory(ctx, body.AppName, body.UserID, body.SessionID)
 }
 
 // addSessionToMemory re-fetches the session (which now includes the latest events)

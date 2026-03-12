@@ -10,12 +10,12 @@ import (
 	"google.golang.org/genai"
 )
 
-// RunAgentRequest
-type RunAgentRequest struct {
+// RunBody is the request body for /run and /run_sse endpoints.
+type RunBody struct {
 	AppName    string         `json:"appName"`
 	UserID     string         `json:"userId"`
 	SessionID  string         `json:"sessionId"`
-	NewMessage genai.Content  `json:"newMessage"`
+	Message    genai.Content  `json:"message"`
 	Streaming  bool           `json:"streaming,omitempty"`
 	StateDelta map[string]any `json:"stateDelta,omitempty"`
 }

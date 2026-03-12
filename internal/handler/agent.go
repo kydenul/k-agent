@@ -20,17 +20,17 @@ func NewAgentHandler(agentSvc *agentsvc.AgentService) *AgentHandler {
 
 // handleRun handles the /run endpoint (compatible with ADK REST API).
 // POST /run
-// Request: RunAgentRequest
+// Request: RunBody
 // Response: []Event
 func (h *AgentHandler) HandleRun(c *gin.Context) {
 	// NOTE: handle the parameters in the request
-	var req models.RunAgentRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
+	var body models.RunBody
+	if err := c.ShouldBindJSON(&body); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	if req.AppName == "" || req.UserID == "" || req.SessionID == "" {
+	if body.AppName == "" || body.UserID == "" || body.SessionID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "appName, userId, and sessionId are required"})
 		return
 	}
@@ -38,7 +38,7 @@ func (h *AgentHandler) HandleRun(c *gin.Context) {
 	ctx := c.Request.Context()
 
 	// NOTE: Call service to handle the request
-	events, code, err := h.agentSvc.Run(ctx, &req)
+	events, code, err := h.agentSvc.Run(ctx, &body)
 	if err != nil {
 		c.JSON(code, gin.H{"error": err.Error()})
 		return
@@ -50,17 +50,17 @@ func (h *AgentHandler) HandleRun(c *gin.Context) {
 
 // HandleRunSSE handles the /run_sse endpoint with Server-Sent Events.
 // POST /run_sse
-// Request: RunAgentRequest
+// Request: RunBody
 // Response: SSE stream of Event objects
 func (h *AgentHandler) HandleRunSSE(c *gin.Context) {
 	// NOTE: handle the parameters in the request
-	var req models.RunAgentRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
+	var body models.RunBody
+	if err := c.ShouldBindJSON(&body); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	if req.AppName == "" || req.UserID == "" || req.SessionID == "" {
+	if body.AppName == "" || body.UserID == "" || body.SessionID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "appName, userId, and sessionId are required"})
 		return
 	}
@@ -68,7 +68,7 @@ func (h *AgentHandler) HandleRunSSE(c *gin.Context) {
 	ctx := c.Request.Context()
 
 	// NOTE: Call service to get event iterator
-	eventIter, code, err := h.agentSvc.RunSSE(ctx, &req)
+	eventIter, code, err := h.agentSvc.RunSSE(ctx, &body)
 	if err != nil {
 		c.JSON(code, gin.H{"error": err.Error()})
 		return
@@ -119,7 +119,7 @@ func (h *AgentHandler) HandleRunSSE(c *gin.Context) {
 	}
 
 	// NOTE: Post-processing after stream completes
-	if err := h.agentSvc.PostRun(ctx, &req); err != nil {
+	if err := h.agentSvc.PostRun(ctx, &body); err != nil {
 		log.Errorf("post-run failed: %v", err)
 	}
 }
