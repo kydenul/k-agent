@@ -1,0 +1,25 @@
+info:
+  name: create_session
+  type: http
+  seq: 2
+
+http:
+  method: POST
+  url: http://localhost:5568/apps/:app_name/users/:user_id/sessions/:session_id
+  params:
+    - name: session_id
+      value: 095fe7ef2e0d18c3cc0f7c51763827d4
+      type: path
+    - name: user_id
+      value: kyden
+      type: path
+    - name: app_name
+      value: k-claw
+      type: path
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

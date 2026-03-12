@@ -1,0 +1,28 @@
+info:
+  name: run_sse
+  type: http
+  seq: 8
+
+http:
+  method: POST
+  url: http://localhost:5568/run_sse
+  body:
+    type: json
+    data: |-
+      {
+        "appName": "k-claw",
+        "userId": "kyden",
+        "sessionId": "3d9bce1265ed1dcffbe07542d020b06f",
+        "message": {
+            "role": "user",
+            "parts": [{"text": "What is the weather in Tokyo?"}]
+          },
+        "streaming": true
+      }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

@@ -1,0 +1,22 @@
+info:
+  name: list_sessions
+  type: http
+  seq: 4
+
+http:
+  method: GET
+  url: http://localhost:5568/apps/:app_name/users/:user_id/sessions
+  params:
+    - name: app_name
+      value: k-claw
+      type: path
+    - name: user_id
+      value: kyden
+      type: path
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
